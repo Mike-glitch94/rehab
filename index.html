@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>リハビリノート</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="リハビリ">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#f6f7f5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141a18" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<style>
+:root{--bg:#f6f7f5;--card:#fff;--text:#1f2a26;--sub:#6b7770;--line:#e3e7e4;--accent:#2f7d6b;--accent-t:#fff;--danger:#c0392b;--chip:#e6f2ee;--warnbg:#fdf0e0;--warnt:#8a4b00;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141a18;--card:#1d2522;--text:#e8eeea;--sub:#93a199;--line:#2c3732;--accent:#5fc0a8;--accent-t:#0e1a16;--danger:#ef7b6e;--chip:#23372f;--warnbg:#3a2c14;--warnt:#f2c27a;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#141a18;--card:#1d2522;--text:#e8eeea;--sub:#93a199;--line:#2c3732;--accent:#5fc0a8;--accent-t:#0e1a16;--danger:#ef7b6e;--chip:#23372f;--warnbg:#3a2c14;--warnt:#f2c27a;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;line-height:1.6}
+main{max-width:640px;margin:0 auto;padding:16px 16px 96px}
+h1{font-size:20px;margin:8px 0 2px}
+.last{font-size:12px;color:var(--sub);margin:0 0 12px}
+.tabs{display:flex;gap:4px;background:var(--line);padding:4px;border-radius:12px;margin-bottom:12px}
+.tabs button{flex:1;border:0;background:transparent;color:var(--sub);padding:9px 2px;border-radius:9px;font-size:13px;font-weight:600}
+.tabs button.on{background:var(--card);color:var(--text)}
+input,textarea{width:100%;font:inherit;font-size:16px;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px}
+textarea{resize:vertical;min-height:84px}
+label{display:block;font-size:13px;color:var(--sub);margin:12px 0 4px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+.warn{background:var(--warnbg);color:var(--warnt);border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:14px}
+.warn button{margin-top:8px}
+.date{font-weight:700;font-size:15px}
+.tag{display:inline-block;background:var(--chip);color:var(--accent);border-radius:99px;padding:1px 10px;font-size:12px;margin-left:6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 0}
+.chip{display:inline-block;background:var(--chip);color:var(--accent);border:0;border-radius:99px;padding:3px 11px;font-size:13px}
+.chip.on{background:var(--accent);color:var(--accent-t)}
+.h{font-size:12px;color:var(--sub);margin:10px 0 2px;font-weight:600}
+.fb{white-space:pre-wrap;margin:0}
+ul{margin:2px 0 0;padding-left:20px}
+.row{display:flex;gap:8px;margin-top:12px}
+.btn{border:1px solid var(--line);background:transparent;color:var(--text);border-radius:10px;padding:8px 14px;font-size:14px}
+.btn.p{background:var(--accent);color:var(--accent-t);border-color:var(--accent);font-weight:700}
+.btn.d{color:var(--danger)}
+.fab{position:fixed;right:20px;bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--accent);color:var(--accent-t);border:0;border-radius:99px;padding:14px 22px;font-size:16px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.empty{text-align:center;color:var(--sub);padding:40px 12px}
+.hint{font-size:12px;color:var(--sub);margin:4px 0 0}
+.prow{display:flex;gap:6px;margin-bottom:6px;align-items:center}
+.prow input{flex:1;min-width:0}
+.prow .x{border:0;background:transparent;color:var(--sub);font-size:20px;padding:0 6px}
+.tl{border-top:1px solid var(--line);padding:8px 0}
+</style>
+</head>
+<body>
+<main>
+<h1>🌿 リハビリノート</h1>
+<p class="last" id="last"></p>
+<div class="tabs"><button data-tab="log">記録</button><button data-tab="part">部位別</button><button data-tab="home">自宅メニュー</button><button data-tab="bk">バックアップ</button></div>
+<div id="top"></div>
+<div id="view"></div>
+</main>
+<button class="fab" id="fab">＋ 追加</button>
+<datalist id="dl-part"></datalist>
+<datalist id="dl-sym"></datalist>
+<script>
+const KEY='pt-notes-v1',MKEY='pt-notes-meta';
+let entries=[],meta={},tab='log',editing=null,q='',pf='',dl=null,msg='';
+try{entries=JSON.parse(localStorage.getItem(KEY)||'[]');if(!Array.isArray(entries))entries=[]}catch(e){entries=[]}
+try{meta=JSON.parse(localStorage.getItem(MKEY)||'{}')||{}}catch(e){meta={}}
+const norm=e=>({id:e.id||Date.now(),date:e.date||today(),place:e.place||'',feedback:e.feedback||'',exercises:Array.isArray(e.exercises)?e.exercises:[],parts:Array.isArray(e.parts)?e.parts.filter(p=>p&&p.part):[]});
+entries=entries.map(norm);
+function save(){try{localStorage.setItem(KEY,JSON.stringify(entries))}catch(e){}}
+function saveMeta(){try{localStorage.setItem(MKEY,JSON.stringify(meta))}catch(e){}}
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+const fmt=d=>{const[y,m,dd]=d.split('-');const w='日月火水木金土'[new Date(+y,m-1,+dd).getDay()];return `${y}/${+m}/${+dd}（${w}）`};
+const sorted=()=>[...entries].sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
+const allParts=()=>[...new Set(entries.flatMap(e=>e.parts.map(p=>p.part)))];
+const daysSince=()=>meta.last?Math.floor((Date.now()-new Date(meta.last).getTime())/864e5):null;
+const chipTxt=p=>esc(p.part)+(p.symptom?'：'+esc(p.symptom):'');
+dl={async save({filename,data}){
+  const blob=new Blob([data],{type:'application/json'});
+  try{const f=new File([blob],filename,{type:'application/json'});
+    if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:filename});return}}
+  catch(e){if(e&&e.name==='AbortError')throw{code:'declined'}}
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000)}};
+if('serviceWorker' in navigator&&location.protocol.startsWith('http'))window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+
+function head(){
+  const d=daysSince();
+  $('#last').textContent=d===null?'最終バックアップ：未実施':`最終バックアップ：${new Date(meta.last).toLocaleDateString('ja-JP')}（${d===0?'今日':d+'日前'}）`;
+  let w='';
+  if(entries.length&&(d===null||d>=30))w=`<div class="warn">⚠️ ${d===null?'まだバックアップを取っていません。':`最後のバックアップから${d}日が経過しています。`}ブラウザのデータが消えると記録が失われます。<br><button class="btn p" data-go="bk">バックアップする</button></div>`;
+  $('#top').innerHTML=w;
+  document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{tab='bk';editing=null;render()});
+  $('#dl-part').innerHTML=allParts().map(p=>`<option value="${esc(p)}">`).join('');
+  const sy=[...new Set(['痛み','しびれ','可動域制限','こわばり','筋力低下','違和感','腫れ',...entries.flatMap(e=>e.parts.map(p=>p.symptom).filter(Boolean))])];
+  $('#dl-sym').innerHTML=sy.map(s=>`<option value="${esc(s)}">`).join('');
+}
+function render(){
+  document.querySelectorAll('.tabs button').forEach(b=>b.className=b.dataset.tab===tab?'on':'');
+  $('#fab').style.display=editing||tab==='bk'?'none':'';
+  head();
+  if(editing){renderForm();return}
+  ({log:renderLog,part:renderPart,home:renderHome,bk:renderBk})[tab]();
+}
+function renderLog(){
+  const parts=allParts();
+  const list=sorted().filter(e=>(!pf||e.parts.some(p=>p.part===pf))&&(!q||(e.feedback+e.exercises.join(' ')+e.place+e.parts.map(p=>p.part+p.symptom).join(' ')).includes(q)));
+  let h=`<input id="q" placeholder="キーワードで検索" value="${esc(q)}">`;
+  if(parts.length)h+=`<div class="chips" style="margin-bottom:12px"><button class="chip ${pf?'':'on'}" data-pf="">すべて</button>${parts.map(p=>`<button class="chip ${pf===p?'on':''}" data-pf="${esc(p)}">${esc(p)}</button>`).join('')}</div>`;
+  else h+='<div style="height:12px"></div>';
+  if(!list.length)h+=`<div class="empty">${entries.length?'該当する記録がありません':'まだ記録がありません。<br>「＋ 追加」から施術後のフィードバックを残しましょう。'}</div>`;
+  list.forEach(e=>{
+    h+=`<div class="card"><div class="date">${fmt(e.date)}${e.place?`<span class="tag">${esc(e.place)}</span>`:''}</div>
+    ${e.parts.length?`<div class="chips">${e.parts.map(p=>`<span class="chip">${chipTxt(p)}</span>`).join('')}</div>`:''}
+    ${e.feedback?`<div class="h">フィードバック</div><p class="fb">${esc(e.feedback)}</p>`:''}
+    ${e.exercises.length?`<div class="h">自宅でやること</div><ul>${e.exercises.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}
+    <div class="row"><button class="btn" data-edit="${e.id}">編集</button><button class="btn d" data-del="${e.id}">削除</button></div></div>`;
+  });
+  $('#view').innerHTML=h;
+  const qi=$('#q');qi.oninput=()=>{q=qi.value;const p=qi.selectionStart;renderLog();const n=$('#q');n.focus();n.setSelectionRange(p,p)};
+  document.querySelectorAll('[data-pf]').forEach(b=>b.onclick=()=>{pf=b.dataset.pf;renderLog()});
+  document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{const e=entries.find(e=>e.id==b.dataset.edit);editing=JSON.parse(JSON.stringify(e));render()});
+  document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{if(confirm('この記録を削除しますか？')){entries=entries.filter(e=>e.id!=b.dataset.del);save();render()}});
+}
+function renderPart(){
+  const m=new Map();
+  sorted().forEach(e=>e.parts.forEach(p=>{if(!m.has(p.part))m.set(p.part,[]);m.get(p.part).push({e,p})}));
+  let h='<p class="hint" style="margin:0 0 12px">部位ごとに、いつ・どんな症状で・どんな施術やフィードバックを受けたかを時系列でまとめます。</p>';
+  if(!m.size)h+='<div class="empty">部位タグがついた記録がまだありません。<br>記録の追加時に「部位・症状」を入力してください。</div>';
+  [...m.entries()].sort((a,b)=>b[1].length-a[1].length).forEach(([part,items])=>{
+    h+=`<div class="card"><div class="date">${esc(part)}<span class="tag">${items.length}件</span></div>`;
+    items.forEach(({e,p})=>h+=`<div class="tl"><div style="font-size:13px;font-weight:600">${fmt(e.date)}${p.symptom?`<span class="chip" style="margin-left:6px">${esc(p.symptom)}</span>`:''}</div>${e.feedback?`<p class="fb" style="font-size:14px;margin-top:2px">${esc(e.feedback)}</p>`:''}</div>`);
+    h+='</div>';
+  });
+  $('#view').innerHTML=h;
+}
+function renderHome(){
+  const seen=new Map();
+  sorted().forEach(e=>e.exercises.forEach(x=>{const k=x.trim();if(k&&!seen.has(k))seen.set(k,e.date)}));
+  let h='<p class="hint" style="margin:0 0 12px">これまでの記録から、自宅でやるメニューを新しい順にまとめています（同じ内容は最新の日付のみ）。</p>';
+  if(!seen.size)h+='<div class="empty">自宅メニューはまだありません。</div>';
+  else{h+='<div class="card"><ul style="list-style:none;padding:0">';
+    seen.forEach((d,k)=>h+=`<li style="padding:8px 0;border-bottom:1px solid var(--line)">${esc(k)}<div class="hint">${fmt(d)}に指導</div></li>`);
+    h+='</ul></div>'}
+  $('#view').innerHTML=h;
+}
+function backupJson(){return JSON.stringify({app:'pt-notes',version:2,exportedAt:new Date().toISOString(),entries},null,2)}
+function markBackup(){meta.last=new Date().toISOString();saveMeta()}
+function renderBk(){
+  const d=daysSince();
+  $('#view').innerHTML=`<div class="card"><div class="date">バックアップを書き出す</div>
+  <p class="hint">記録 ${entries.length} 件をJSONファイルとして保存します。月に1回を目安にどうぞ。</p>
+  ${dl?'<div class="row"><button class="btn p" id="b-save">ファイルに保存</button></div>':''}
+  <div class="row"><button class="btn ${dl?'':'p'}" id="b-copy">テキストをコピー</button></div>
+  <p class="hint" id="b-msg">${esc(msg)}</p></div>
+  <div class="card"><div class="date">バックアップから復元</div>
+  <p class="hint">同じIDの記録は上書き、新しい記録は追加されます。</p>
+  <label>ファイルを選ぶ</label><input type="file" id="i-file" accept=".json,application/json">
+  <label>またはバックアップのテキストを貼り付け</label><textarea id="i-txt" placeholder="{ ... }"></textarea>
+  <div class="row"><button class="btn" id="i-go">読み込む</button></div></div>`;
+  $('#b-copy').onclick=async()=>{
+    const t=backupJson();let ok=false;
+    try{await navigator.clipboard.writeText(t);ok=true}catch(e){}
+    if(!ok){const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();try{ok=document.execCommand('copy')}catch(e){}ta.remove()}
+    if(ok){markBackup();msg='コピーしました。メモアプリやメールなどに貼り付けて保管してください。';head()}else msg='コピーできませんでした。';$('#b-msg').textContent=msg};
+  if(dl)$('#b-save').onclick=async()=>{
+    try{await dl.save({filename:`rehab-notes-${today().replace(/-/g,'')}.json`,data:backupJson()});markBackup();msg='保存しました。';head()}
+    catch(e){msg=e&&e.code==='declined'?'保存をキャンセルしました。':'保存できませんでした。「テキストをコピー」をお試しください。'}
+    $('#b-msg').textContent=msg};
+  const imp=txt=>{try{const o=JSON.parse(txt);const arr=Array.isArray(o)?o:o.entries;if(!Array.isArray(arr))throw 0;
+    arr.map(norm).forEach(n=>{const i=entries.findIndex(x=>x.id===n.id);i>=0?entries[i]=n:entries.push(n)});
+    save();msg=`${arr.length}件を読み込みました。`;render()}catch(e){alert('読み込めませんでした。バックアップの形式を確認してください。')}};
+  $('#i-go').onclick=()=>{const t=$('#i-txt').value.trim();if(t)imp(t);else alert('テキストを貼り付けるか、ファイルを選んでください')};
+  $('#i-file').onchange=ev=>{const f=ev.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>imp(r.result);r.readAsText(f)};
+}
+function sync(){
+  const e=editing;e.date=$('#f-date').value||today();e.place=$('#f-place').value.trim();e.feedback=$('#f-fb').value.trim();
+  e.exercises=$('#f-ex').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  e.parts=[...document.querySelectorAll('.prow')].map(r=>({part:r.children[0].value.trim(),symptom:r.children[1].value.trim()}));
+}
+function renderForm(){
+  const e=editing;
+  const rows=(e.parts.length?e.parts:[{part:'',symptom:''}]).map((p,i)=>`<div class="prow"><input list="dl-part" placeholder="部位（例：右肩）" value="${esc(p.part)}"><input list="dl-sym" placeholder="症状（例：痛み）" value="${esc(p.symptom)}"><button class="x" data-rm="${i}" aria-label="削除">×</button></div>`).join('');
+  $('#view').innerHTML=`<div class="card"><div class="date">${e.id&&entries.some(x=>x.id===e.id)?'記録を編集':'新しい記録'}</div>
+  <label>日付</label><input type="date" id="f-date" value="${esc(e.date)}">
+  <label>担当・場所（任意）</label><input id="f-place" placeholder="例：〇〇整骨院 / 田中先生" value="${esc(e.place)}">
+  <label>痛み・動きが悪かった部位と症状</label>${rows}
+  <button class="btn" id="f-addp">＋ 部位を追加</button>
+  <label>受けたフィードバック・施術内容</label><textarea id="f-fb" placeholder="例：右肩の可動域が改善。猫背で肩が前に出やすい。">${esc(e.feedback)}</textarea>
+  <label>自宅でやること</label><textarea id="f-ex" placeholder="1行に1つ書いてください&#10;例：肩甲骨寄せ 10回×3セット（朝晩）">${esc(e.exercises.join('\n'))}</textarea>
+  <p class="hint">1行に1メニュー。回数や頻度も一緒に書けます。</p>
+  <div class="row"><button class="btn p" id="f-save">保存</button><button class="btn" id="f-cancel">キャンセル</button></div></div>`;
+  $('#f-addp').onclick=()=>{sync();editing.parts.push({part:'',symptom:''});renderForm()};
+  document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{sync();editing.parts.splice(+b.dataset.rm,1);renderForm()});
+  $('#f-cancel').onclick=()=>{editing=null;render()};
+  $('#f-save').onclick=()=>{
+    sync();const o={...editing,parts:editing.parts.filter(p=>p.part)};
+    if(!o.feedback&&!o.exercises.length&&!o.parts.length){alert('部位・フィードバック・自宅メニューのいずれかは入力してください');return}
+    const i=entries.findIndex(x=>x.id===o.id);i>=0?entries[i]=o:entries.push(o);
+    save();editing=null;tab='log';render();
+  };
+}
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;editing=null;msg='';render()});
+$('#fab').onclick=()=>{editing={id:Date.now(),date:today(),place:'',feedback:'',exercises:[],parts:[]};render()};
+render();
+</script>
+</body>
+</html>
