@@ -26,7 +26,7 @@ h1{font-size:20px;margin:8px 0 2px}
 .tabs{display:flex;gap:4px;background:var(--line);padding:4px;border-radius:12px;margin-bottom:12px}
 .tabs button{flex:1;border:0;background:transparent;color:var(--sub);padding:9px 2px;border-radius:9px;font-size:13px;font-weight:600}
 .tabs button.on{background:var(--card);color:var(--text)}
-input,textarea{width:100%;font:inherit;font-size:16px;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px}
+input,textarea,select{width:100%;font:inherit;font-size:16px;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px}
 textarea{resize:vertical;min-height:84px}
 label{display:block;font-size:13px;color:var(--sub);margin:12px 0 4px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
@@ -42,6 +42,7 @@ label{display:block;font-size:13px;color:var(--sub);margin:12px 0 4px}
 ul{margin:2px 0 0;padding-left:20px}
 .row{display:flex;gap:8px;margin-top:12px}
 .btn{border:1px solid var(--line);background:transparent;color:var(--text);border-radius:10px;padding:8px 14px;font-size:14px}
+.btn:disabled{opacity:.35}
 .btn.p{background:var(--accent);color:var(--accent-t);border-color:var(--accent);font-weight:700}
 .btn.d{color:var(--danger)}
 .fab{position:fixed;right:20px;bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--accent);color:var(--accent-t);border:0;border-radius:99px;padding:14px 22px;font-size:16px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.25)}
@@ -49,8 +50,28 @@ ul{margin:2px 0 0;padding-left:20px}
 .hint{font-size:12px;color:var(--sub);margin:4px 0 0}
 .prow{display:flex;gap:6px;margin-bottom:6px;align-items:center}
 .prow input{flex:1;min-width:0}
-.prow .x{border:0;background:transparent;color:var(--sub);font-size:20px;padding:0 6px}
+.x{border:0;background:transparent;color:var(--sub);font-size:20px;padding:0 6px}
 .tl{border-top:1px solid var(--line);padding:8px 0}
+summary{list-style:none;cursor:pointer}
+summary::-webkit-details-marker{display:none}
+details>summary .date::after{content:"▾";float:right;color:var(--sub)}
+details[open]>summary .date::after{content:"▴"}
+.nav{display:flex;gap:6px;margin-bottom:12px}
+.nav select{flex:1;background:var(--card)}
+.nav .btn{width:48px;padding:8px 0}
+.mh{font-size:13px;font-weight:700;color:var(--sub);margin:14px 0 6px}
+.pb{border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:8px}
+.pb>input,.pb>textarea{margin-top:6px}
+.pb textarea{min-height:64px}
+.pi{display:flex;gap:6px;align-items:center;margin-top:6px}
+.pi img{width:56px;height:56px;object-fit:cover;border-radius:8px;flex:none}
+.pg{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.fg{margin:0;width:92px}
+.fg img{width:92px;height:92px;object-fit:cover;border-radius:10px;display:block}
+.fg figcaption{font-size:11px;color:var(--sub);line-height:1.3;word-break:break-all}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9;padding:16px}
+.ov img{max-width:100%;max-height:80%;object-fit:contain}
+.ov p{color:#fff;margin:12px 0 0;text-align:center;white-space:pre-wrap}
 </style>
 </head>
 <body>
@@ -66,35 +87,76 @@ ul{margin:2px 0 0;padding-left:20px}
 <datalist id="dl-sym"></datalist>
 <script>
 const KEY='pt-notes-v1',MKEY='pt-notes-meta';
-let entries=[],meta={},tab='log',editing=null,q='',pf='',dl=null,msg='';
-try{entries=JSON.parse(localStorage.getItem(KEY)||'[]');if(!Array.isArray(entries))entries=[]}catch(e){entries=[]}
-try{meta=JSON.parse(localStorage.getItem(MKEY)||'{}')||{}}catch(e){meta={}}
-const norm=e=>({id:e.id||Date.now(),date:e.date||today(),place:e.place||'',feedback:e.feedback||'',exercises:Array.isArray(e.exercises)?e.exercises:[],parts:Array.isArray(e.parts)?e.parts.filter(p=>p&&p.part):[]});
-entries=entries.map(norm);
-function save(){try{localStorage.setItem(KEY,JSON.stringify(entries))}catch(e){}}
-function saveMeta(){try{localStorage.setItem(MKEY,JSON.stringify(meta))}catch(e){}}
+let entries=[],meta={},tab='log',editing=null,q='',pf='',mo='',lim=20,msg='',note='',db;
+const th=new Map();
 const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 const fmt=d=>{const[y,m,dd]=d.split('-');const w='日月火水木金土'[new Date(+y,m-1,+dd).getDay()];return `${y}/${+m}/${+dd}（${w}）`};
-const sorted=()=>[...entries].sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
+const ml=m=>m.slice(0,4)+'年'+(+m.slice(5,7))+'月';
+const uid=()=>crypto.randomUUID?crypto.randomUUID():'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c=='x'?r:r&3|8).toString(16)});
+const norm=e=>({id:String(e.id||uid()),date:e.date||today(),place:e.place||'',feedback:e.feedback||'',
+ parts:(Array.isArray(e.parts)?e.parts:[]).filter(p=>p&&p.part).map(p=>({part:p.part,symptom:p.symptom||'',detail:p.detail||''})),
+ exercises:(Array.isArray(e.exercises)?e.exercises:[]).map(x=>typeof x==='string'?{text:x.trim(),photos:[]}:{text:String(x&&x.text||'').trim(),photos:(Array.isArray(x&&x.photos)?x.photos:[]).filter(p=>p&&p.id).map(p=>({id:String(p.id),caption:p.caption||''}))}).filter(x=>x.text||x.photos.length),
+ createdAt:e.createdAt||(+e.id>1e12?+e.id:0),updatedAt:e.updatedAt||''});
+const sig=e=>JSON.stringify([e.date,e.place,e.feedback,e.parts.map(p=>[p.part,p.symptom,p.detail]),e.exercises.map(x=>[x.text,x.photos.map(p=>[p.id,p.caption])])]);
+const sorted=()=>[...entries].sort((a,b)=>b.date.localeCompare(a.date)||b.createdAt-a.createdAt);
 const allParts=()=>[...new Set(entries.flatMap(e=>e.parts.map(p=>p.part)))];
 const daysSince=()=>meta.last?Math.floor((Date.now()-new Date(meta.last).getTime())/864e5):null;
 const chipTxt=p=>esc(p.part)+(p.symptom?'：'+esc(p.symptom):'');
-dl={async save({filename,data}){
-  const blob=new Blob([data],{type:'application/json'});
-  try{const f=new File([blob],filename,{type:'application/json'});
-    if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:filename});return}}
-  catch(e){if(e&&e.name==='AbortError')throw{code:'declined'}}
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;document.body.appendChild(a);a.click();
-  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000)}};
+const hay=e=>(e.feedback+' '+e.place+' '+e.parts.map(p=>p.part+' '+p.symptom+' '+p.detail).join(' ')+' '+e.exercises.map(x=>x.text+' '+x.photos.map(p=>p.caption).join(' ')).join(' ')).toLowerCase();
+
+/* IndexedDB */
+const req=(s,m,f)=>new Promise((ok,ng)=>{const t=db.transaction(s,m==='r'?'readonly':'readwrite');let r;try{r=f(t.objectStore(s))}catch(e){ng(e);return}t.oncomplete=()=>ok(r&&r.result);t.onerror=t.onabort=()=>ng(t.error)});
+const saveMeta=()=>req('meta','w',s=>s.put(meta,'meta')).catch(()=>{});
+async function put(e){const i=entries.findIndex(x=>x.id===e.id);i>=0?entries[i]=e:entries.push(e);await req('entries','w',s=>s.put(e,e.id))}
+async function gc(){const used=new Set(entries.flatMap(e=>e.exercises.flatMap(x=>x.photos.map(p=>p.id))));
+ for(const[id,v]of[...th]){if(!used.has(id)){URL.revokeObjectURL(v.u);th.delete(id);await req('photos','w',s=>s.delete(id));await req('thumbs','w',s=>s.delete(id))}}}
+
+/* 写真 */
+const shrink=(i,max,qu)=>new Promise((ok,ng)=>{const r=Math.min(1,max/Math.max(i.naturalWidth,i.naturalHeight)),c=document.createElement('canvas');c.width=Math.round(i.naturalWidth*r);c.height=Math.round(i.naturalHeight*r);c.getContext('2d').drawImage(i,0,0,c.width,c.height);c.toBlob(b=>{c.width=c.height=0;b?ok(b):ng()},'image/jpeg',qu)});
+async function mkPhoto(f,id,keep){const u=URL.createObjectURL(f);try{
+ const i=await new Promise((ok,ng)=>{const m=new Image();m.onload=()=>ok(m);m.onerror=ng;m.src=u});
+ id=id||uid();const full=keep?f.slice(0,f.size,'image/jpeg'):await shrink(i,1600,.8),t=await shrink(i,240,.7);
+ await req('photos','w',s=>s.put(full,id));await req('thumbs','w',s=>s.put({id,t,s:full.size},id));
+ th.set(id,{u:URL.createObjectURL(t),s:full.size});return id}finally{URL.revokeObjectURL(u)}}
+async function view(id,cap){const b=await req('photos','r',s=>s.get(id));if(!b){alert('写真が見つかりません');return}
+ const u=URL.createObjectURL(b),o=document.createElement('div');o.className='ov';o.innerHTML=`<img src="${u}"><p>${esc(cap)}</p>`;
+ o.onclick=()=>{URL.revokeObjectURL(u);o.remove()};document.body.appendChild(o)}
+const bindV=()=>document.querySelectorAll('[data-v]').forEach(el=>el.onclick=()=>view(el.dataset.v,el.dataset.c||''));
+
+/* ZIP（無圧縮で書き出し／store・deflate両対応で読み込み） */
+const CT=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+const crc=u=>{let c=-1;for(let i=0;i<u.length;i++)c=CT[(c^u[i])&255]^(c>>>8);return(~c)>>>0};
+async function zip(files){const parts=[],cd=[];let off=0;const n=new Date(),dt=(n.getFullYear()-1980)<<9|(n.getMonth()+1)<<5|n.getDate(),tm=n.getHours()<<11|n.getMinutes()<<5|n.getSeconds()>>1;
+ for(const f of files){const nm=new TextEncoder().encode(f.name),c=crc(new Uint8Array(await f.blob.arrayBuffer())),sz=f.blob.size;
+  const h=new DataView(new ArrayBuffer(30));h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x800,true);h.setUint16(10,tm,true);h.setUint16(12,dt,true);h.setUint32(14,c,true);h.setUint32(18,sz,true);h.setUint32(22,sz,true);h.setUint16(26,nm.length,true);
+  parts.push(h.buffer,nm,f.blob);
+  const g=new DataView(new ArrayBuffer(46));g.setUint32(0,0x02014b50,true);g.setUint16(4,20,true);g.setUint16(6,20,true);g.setUint16(8,0x800,true);g.setUint16(12,tm,true);g.setUint16(14,dt,true);g.setUint32(16,c,true);g.setUint32(20,sz,true);g.setUint32(24,sz,true);g.setUint16(28,nm.length,true);g.setUint32(42,off,true);
+  cd.push(g.buffer,nm);off+=30+nm.length+sz}
+ const e=new DataView(new ArrayBuffer(22));e.setUint32(0,0x06054b50,true);e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);e.setUint32(12,cd.reduce((a,b)=>a+b.byteLength,0),true);e.setUint32(16,off,true);
+ return new Blob([...parts,...cd,e.buffer],{type:'application/zip'})}
+async function unzip(blob){const rd=async(s,e)=>new DataView(await blob.slice(s,e).arrayBuffer());
+ const tail=await rd(Math.max(0,blob.size-65557),blob.size);let p=tail.byteLength-22;while(p>=0&&tail.getUint32(p,true)!==0x06054b50)p--;if(p<0)throw 0;
+ const n=tail.getUint16(p+10,true),cs=tail.getUint32(p+12,true),co=tail.getUint32(p+16,true),cd=await rd(co,co+cs),out=new Map();let q=0;
+ for(let i=0;i<n;i++){const m=cd.getUint16(q+10,true),sz=cd.getUint32(q+20,true),nl=cd.getUint16(q+28,true),el=cd.getUint16(q+30,true),cl=cd.getUint16(q+32,true),lo=cd.getUint32(q+42,true);
+  const name=new TextDecoder().decode(new Uint8Array(cd.buffer,q+46,nl));q+=46+nl+el+cl;if(name.endsWith('/'))continue;
+  const lh=await rd(lo,lo+30),ds=lo+30+lh.getUint16(26,true)+lh.getUint16(28,true);let d=blob.slice(ds,ds+sz);
+  if(m===8)d=await new Response(d.stream().pipeThrough(new DecompressionStream('deflate-raw'))).blob();else if(m!==0)throw 0;
+  out.set(name,d)}
+ return out}
+
+const dl={async save(fn,blob){const f=new File([blob],fn,{type:blob.type});
+ try{if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:fn});return}}
+ catch(e){if(e&&e.name==='AbortError')throw{code:'declined'};if(e&&e.name==='NotAllowedError')throw{code:'gesture'}}
+ const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fn;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000)}};
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
 
 function head(){
   const d=daysSince();
   $('#last').textContent=d===null?'最終バックアップ：未実施':`最終バックアップ：${new Date(meta.last).toLocaleDateString('ja-JP')}（${d===0?'今日':d+'日前'}）`;
-  let w='';
-  if(entries.length&&(d===null||d>=30))w=`<div class="warn">⚠️ ${d===null?'まだバックアップを取っていません。':`最後のバックアップから${d}日が経過しています。`}ブラウザのデータが消えると記録が失われます。<br><button class="btn p" data-go="bk">バックアップする</button></div>`;
+  let w=note?`<div class="warn">${esc(note)}</div>`:'';
+  if(entries.length&&(d===null||d>=30))w+=`<div class="warn">⚠️ ${d===null?'まだバックアップを取っていません。':`最後のバックアップから${d}日が経過しています。`}ブラウザのデータが消えると記録と写真が失われます。<br><button class="btn p" data-go="bk">バックアップする</button></div>`;
   $('#top').innerHTML=w;
   document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{tab='bk';editing=null;render()});
   $('#dl-part').innerHTML=allParts().map(p=>`<option value="${esc(p)}">`).join('');
@@ -108,25 +170,31 @@ function render(){
   if(editing){renderForm();return}
   ({log:renderLog,part:renderPart,home:renderHome,bk:renderBk})[tab]();
 }
+const card=e=>`<details class="card"><summary><div class="date">${fmt(e.date)}${e.place?`<span class="tag">${esc(e.place)}</span>`:''}</div>${e.parts.length?`<div class="chips">${e.parts.map(p=>`<span class="chip">${chipTxt(p)}</span>`).join('')}</div>`:''}</summary>
+  ${e.feedback?`<div class="h">フィードバック</div><p class="fb">${esc(e.feedback)}</p>`:''}
+  ${e.parts.filter(p=>p.detail).map(p=>`<div class="h">${chipTxt(p)} の詳細</div><p class="fb">${esc(p.detail)}</p>`).join('')}
+  ${e.exercises.length?`<div class="h">自宅でやること</div><ul>${e.exercises.map(x=>`<li>${esc(x.text||'（名称なし）')}${x.photos.length?` 📷${x.photos.length}`:''}</li>`).join('')}</ul>`:''}
+  <div class="row"><button class="btn" data-edit="${e.id}">編集</button><button class="btn d" data-del="${e.id}">削除</button></div></details>`;
 function renderLog(){
-  const parts=allParts();
-  const list=sorted().filter(e=>(!pf||e.parts.some(p=>p.part===pf))&&(!q||(e.feedback+e.exercises.join(' ')+e.place+e.parts.map(p=>p.part+p.symptom).join(' ')).includes(q)));
+  const L=sorted(),parts=allParts(),filt=!!(q||pf);let ms=[],i=0,list=L,rest=0;
   let h=`<input id="q" placeholder="キーワードで検索" value="${esc(q)}">`;
-  if(parts.length)h+=`<div class="chips" style="margin-bottom:12px"><button class="chip ${pf?'':'on'}" data-pf="">すべて</button>${parts.map(p=>`<button class="chip ${pf===p?'on':''}" data-pf="${esc(p)}">${esc(p)}</button>`).join('')}</div>`;
-  else h+='<div style="height:12px"></div>';
+  h+=parts.length?`<div class="chips" style="margin:12px 0"><button class="chip ${pf?'':'on'}" data-pf="">すべて</button>${parts.map(p=>`<button class="chip ${pf===p?'on':''}" data-pf="${esc(p)}">${esc(p)}</button>`).join('')}</div>`:'<div style="height:12px"></div>';
+  if(filt){list=L.filter(e=>(!pf||e.parts.some(p=>p.part===pf))&&(!q||hay(e).includes(q.toLowerCase())));rest=Math.max(0,list.length-lim);list=list.slice(0,lim)}
+  else if(L.length){ms=[...new Set(L.map(e=>e.date.slice(0,7)))];if(!ms.includes(mo))mo=ms[0];i=ms.indexOf(mo);
+    h+=`<div class="nav"><button class="btn" id="m-prev" ${i>=ms.length-1?'disabled':''} aria-label="前の月">◀</button><select id="m-sel">${ms.map(m=>`<option value="${m}" ${m===mo?'selected':''}>${ml(m)}（${L.filter(e=>e.date.startsWith(m)).length}件）</option>`).join('')}</select><button class="btn" id="m-next" ${i<=0?'disabled':''} aria-label="次の月">▶</button></div>`;
+    list=L.filter(e=>e.date.startsWith(mo))}
   if(!list.length)h+=`<div class="empty">${entries.length?'該当する記録がありません':'まだ記録がありません。<br>「＋ 追加」から施術後のフィードバックを残しましょう。'}</div>`;
-  list.forEach(e=>{
-    h+=`<div class="card"><div class="date">${fmt(e.date)}${e.place?`<span class="tag">${esc(e.place)}</span>`:''}</div>
-    ${e.parts.length?`<div class="chips">${e.parts.map(p=>`<span class="chip">${chipTxt(p)}</span>`).join('')}</div>`:''}
-    ${e.feedback?`<div class="h">フィードバック</div><p class="fb">${esc(e.feedback)}</p>`:''}
-    ${e.exercises.length?`<div class="h">自宅でやること</div><ul>${e.exercises.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}
-    <div class="row"><button class="btn" data-edit="${e.id}">編集</button><button class="btn d" data-del="${e.id}">削除</button></div></div>`;
-  });
+  let cur='';list.forEach(e=>{if(filt&&e.date.slice(0,7)!==cur){cur=e.date.slice(0,7);h+=`<div class="mh">${ml(cur)}</div>`}h+=card(e)});
+  if(rest)h+=`<button class="btn" id="more" style="width:100%">さらに表示（残り${rest}件）</button>`;
   $('#view').innerHTML=h;
-  const qi=$('#q');qi.oninput=()=>{q=qi.value;const p=qi.selectionStart;renderLog();const n=$('#q');n.focus();n.setSelectionRange(p,p)};
-  document.querySelectorAll('[data-pf]').forEach(b=>b.onclick=()=>{pf=b.dataset.pf;renderLog()});
-  document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{const e=entries.find(e=>e.id==b.dataset.edit);editing=JSON.parse(JSON.stringify(e));render()});
-  document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{if(confirm('この記録を削除しますか？')){entries=entries.filter(e=>e.id!=b.dataset.del);save();render()}});
+  const qi=$('#q');qi.oninput=()=>{q=qi.value;lim=20;const p=qi.selectionStart;renderLog();const n=$('#q');n.focus();n.setSelectionRange(p,p)};
+  document.querySelectorAll('[data-pf]').forEach(b=>b.onclick=()=>{pf=b.dataset.pf;lim=20;renderLog()});
+  const go=m=>{mo=m;renderLog();scrollTo(0,0)};
+  if($('#m-sel')){$('#m-sel').onchange=ev=>go(ev.target.value);$('#m-prev').onclick=()=>go(ms[i+1]);$('#m-next').onclick=()=>go(ms[i-1])}
+  if($('#more'))$('#more').onclick=()=>{lim+=20;renderLog()};
+  document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{editing=JSON.parse(JSON.stringify(entries.find(e=>e.id===b.dataset.edit)));render()});
+  document.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{if(!confirm('この記録を削除しますか？（紐づく写真も削除されます）'))return;
+    try{entries=entries.filter(e=>e.id!==b.dataset.del);await req('entries','w',s=>s.delete(b.dataset.del));await gc()}catch(e){alert('削除できませんでした')}render()});
 }
 function renderPart(){
   const m=new Map();
@@ -135,80 +203,132 @@ function renderPart(){
   if(!m.size)h+='<div class="empty">部位タグがついた記録がまだありません。<br>記録の追加時に「部位・症状」を入力してください。</div>';
   [...m.entries()].sort((a,b)=>b[1].length-a[1].length).forEach(([part,items])=>{
     h+=`<div class="card"><div class="date">${esc(part)}<span class="tag">${items.length}件</span></div>`;
-    items.forEach(({e,p})=>h+=`<div class="tl"><div style="font-size:13px;font-weight:600">${fmt(e.date)}${p.symptom?`<span class="chip" style="margin-left:6px">${esc(p.symptom)}</span>`:''}</div>${e.feedback?`<p class="fb" style="font-size:14px;margin-top:2px">${esc(e.feedback)}</p>`:''}</div>`);
+    items.forEach(({e,p})=>h+=`<div class="tl"><div style="font-size:13px;font-weight:600">${fmt(e.date)}${p.symptom?`<span class="chip" style="margin-left:6px">${esc(p.symptom)}</span>`:''}</div>${p.detail?`<p class="fb" style="font-size:14px;margin-top:2px;color:var(--sub)">${esc(p.detail)}</p>`:''}${e.feedback?`<p class="fb" style="font-size:14px;margin-top:2px">${esc(e.feedback)}</p>`:''}</div>`);
     h+='</div>';
   });
   $('#view').innerHTML=h;
 }
 function renderHome(){
-  const seen=new Map();
-  sorted().forEach(e=>e.exercises.forEach(x=>{const k=x.trim();if(k&&!seen.has(k))seen.set(k,e.date)}));
-  let h='<p class="hint" style="margin:0 0 12px">これまでの記録から、自宅でやるメニューを新しい順にまとめています（同じ内容は最新の日付のみ）。</p>';
-  if(!seen.size)h+='<div class="empty">自宅メニューはまだありません。</div>';
+  const m=new Map();
+  sorted().forEach(e=>e.exercises.forEach(x=>{const k=x.text||'（名称なし）';if(!m.has(k))m.set(k,{d:e.date,ph:[]});x.photos.forEach(p=>th.has(p.id)&&m.get(k).ph.push(p))}));
+  let h='<p class="hint" style="margin:0 0 12px">これまでの記録から、自宅でやるメニューを新しい順にまとめています（同じ内容は最新の日付のみ。写真は同じメニューのものをまとめて表示）。写真をタップすると拡大します。</p>';
+  if(!m.size)h+='<div class="empty">自宅メニューはまだありません。</div>';
   else{h+='<div class="card"><ul style="list-style:none;padding:0">';
-    seen.forEach((d,k)=>h+=`<li style="padding:8px 0;border-bottom:1px solid var(--line)">${esc(k)}<div class="hint">${fmt(d)}に指導</div></li>`);
+    m.forEach((v,k)=>h+=`<li style="padding:8px 0;border-bottom:1px solid var(--line)">${esc(k)}<div class="hint">${fmt(v.d)}に指導</div>${v.ph.length?`<div class="pg">${v.ph.map(p=>`<figure class="fg"><img src="${th.get(p.id).u}" data-v="${p.id}" data-c="${esc(p.caption)}">${p.caption?`<figcaption>${esc(p.caption)}</figcaption>`:''}</figure>`).join('')}</div>`:''}</li>`);
     h+='</ul></div>'}
-  $('#view').innerHTML=h;
+  $('#view').innerHTML=h;bindV();
 }
-function backupJson(){return JSON.stringify({app:'pt-notes',version:2,exportedAt:new Date().toISOString(),entries},null,2)}
 function markBackup(){meta.last=new Date().toISOString();saveMeta()}
+async function exportZip(){
+  const files=[{name:'backup.json',blob:new Blob([JSON.stringify({app:'pt-notes',version:3,exportedAt:new Date().toISOString(),entries},null,1)],{type:'application/json'})}];
+  const ids=[...new Set(entries.flatMap(e=>e.exercises.flatMap(x=>x.photos.map(p=>p.id))))];
+  for(const id of ids){const b=await req('photos','r',s=>s.get(id));if(b)files.push({name:`photos/${id}.jpg`,blob:b})}
+  return zip(files)}
+async function parseFile(f){
+  const h=new Uint8Array(await f.slice(0,2).arrayBuffer());
+  if(h[0]===0x50&&h[1]===0x4b){const m=await unzip(f),j=m.get('backup.json');if(!j)throw 0;const ph=new Map();
+    m.forEach((b,n)=>{const x=/^photos\/(.+)\.jpg$/.exec(n);if(x)ph.set(x[1],b)});return{o:JSON.parse(await j.text()),ph}}
+  return{o:JSON.parse(await f.text()),ph:new Map()}}
+function prep({o,ph}){const arr=Array.isArray(o)?o:o.entries;if(!Array.isArray(arr))throw 0;
+  const add=[],same=[],ow=[];
+  arr.map(norm).forEach(n=>{n.exercises.forEach(x=>x.photos=x.photos.filter(p=>ph.has(p.id)||th.has(p.id)));
+    const c=entries.find(x=>x.id===n.id);!c?add.push(n):sig(c)===sig(n)?same.push(n):ow.push({n,c})});
+  return{add,same,ow,ph}}
+async function apply(P,all){
+  const list=[...P.add,...(all?P.ow.map(o=>o.n):[])];let bad=0;
+  try{for(const n of list){for(const x of n.exercises)for(const p of x.photos)if(!th.has(p.id)&&P.ph.has(p.id)){try{await mkPhoto(P.ph.get(p.id),p.id,true)}catch(e){bad++}}await put(n)}
+    await gc();msg=`追加${P.add.length}件`+(all?`・上書き${P.ow.length}件`:`（上書き${P.ow.length}件はスキップ）`)+'を読み込みました。'+(bad?`写真${bad}枚は読み込めませんでした。`:'')}
+  catch(e){msg='読み込み中にエラーが発生しました。'}
+  render()}
+function showImp(P){
+  if(!P.ow.length){apply(P,true);return}
+  $('#imp').innerHTML=`<div class="warn" style="margin-top:12px"><b>読み込み前の確認</b><br>追加 ${P.add.length}件／上書き ${P.ow.length}件／変更なし ${P.same.length}件
+  <ul style="max-height:200px;overflow:auto;margin:6px 0">${P.ow.map(({n,c})=>`<li>${fmt(c.date)} ${esc(c.place)} ${esc(c.parts.map(p=>p.part).join('・'))}${n.updatedAt&&c.updatedAt?(n.updatedAt>c.updatedAt?'（バックアップの方が新しい）':'（今の記録の方が新しい）'):''}</li>`).join('')}</ul>
+  <div class="row"><button class="btn p" id="o-all">すべて読み込む</button><button class="btn" id="o-add">追加分だけ</button><button class="btn" id="o-no">キャンセル</button></div></div>`;
+  $('#o-all').onclick=()=>apply(P,true);$('#o-add').onclick=()=>apply(P,false);$('#o-no').onclick=()=>{$('#imp').innerHTML='';$('#b-msg').textContent=''};
+}
 function renderBk(){
-  const d=daysSince();
+  const mb=([...th.values()].reduce((a,v)=>a+v.s,0)/1048576).toFixed(1),legacy=meta.migrated&&localStorage.getItem(KEY)!==null;
   $('#view').innerHTML=`<div class="card"><div class="date">バックアップを書き出す</div>
-  <p class="hint">記録 ${entries.length} 件をJSONファイルとして保存します。月に1回を目安にどうぞ。</p>
-  ${dl?'<div class="row"><button class="btn p" id="b-save">ファイルに保存</button></div>':''}
-  <div class="row"><button class="btn ${dl?'':'p'}" id="b-copy">テキストをコピー</button></div>
-  <p class="hint" id="b-msg">${esc(msg)}</p></div>
+  <p class="hint">記録 ${entries.length} 件・写真 ${th.size} 枚（約${mb}MB）をZIPファイルにまとめて保存します。月に1回を目安にどうぞ。</p>
+  <div class="row"><button class="btn p" id="b-save">ZIPで保存</button></div><p class="hint" id="b-msg">${esc(msg)}</p></div>
   <div class="card"><div class="date">バックアップから復元</div>
-  <p class="hint">同じIDの記録は上書き、新しい記録は追加されます。</p>
-  <label>ファイルを選ぶ</label><input type="file" id="i-file" accept=".json,application/json">
-  <label>またはバックアップのテキストを貼り付け</label><textarea id="i-txt" placeholder="{ ... }"></textarea>
-  <div class="row"><button class="btn" id="i-go">読み込む</button></div></div>`;
-  $('#b-copy').onclick=async()=>{
-    const t=backupJson();let ok=false;
-    try{await navigator.clipboard.writeText(t);ok=true}catch(e){}
-    if(!ok){const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();try{ok=document.execCommand('copy')}catch(e){}ta.remove()}
-    if(ok){markBackup();msg='コピーしました。メモアプリやメールなどに貼り付けて保管してください。';head()}else msg='コピーできませんでした。';$('#b-msg').textContent=msg};
-  if(dl)$('#b-save').onclick=async()=>{
-    try{await dl.save({filename:`rehab-notes-${today().replace(/-/g,'')}.json`,data:backupJson()});markBackup();msg='保存しました。';head()}
-    catch(e){msg=e&&e.code==='declined'?'保存をキャンセルしました。':'保存できませんでした。「テキストをコピー」をお試しください。'}
-    $('#b-msg').textContent=msg};
-  const imp=txt=>{try{const o=JSON.parse(txt);const arr=Array.isArray(o)?o:o.entries;if(!Array.isArray(arr))throw 0;
-    arr.map(norm).forEach(n=>{const i=entries.findIndex(x=>x.id===n.id);i>=0?entries[i]=n:entries.push(n)});
-    save();msg=`${arr.length}件を読み込みました。`;render()}catch(e){alert('読み込めませんでした。バックアップの形式を確認してください。')}};
-  $('#i-go').onclick=()=>{const t=$('#i-txt').value.trim();if(t)imp(t);else alert('テキストを貼り付けるか、ファイルを選んでください')};
-  $('#i-file').onchange=ev=>{const f=ev.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>imp(r.result);r.readAsText(f)};
+  <p class="hint">ver2のZIPと、旧バージョンのJSONを読み込めます。同じIDの記録がある場合は、確認画面が出ます。</p>
+  <label>ファイルを選ぶ</label><input type="file" id="i-file" accept=".zip,.json,application/zip,application/json">
+  <label>または旧バックアップのテキストを貼り付け</label><textarea id="i-txt" placeholder="{ ... }"></textarea>
+  <div class="row"><button class="btn" id="i-go">読み込む</button></div><div id="imp"></div></div>
+  ${legacy?`<div class="card"><div class="date">旧データの削除</div><p class="hint">以前の保存形式のデータが端末に残っています。ver2で記録が表示されることを確認したら削除できます。</p><div class="row"><button class="btn d" id="b-old">旧データを削除</button></div></div>`:''}`;
+  $('#b-save').onclick=async()=>{const fn=`rehab-notes-${today().replace(/-/g,'')}.zip`,m=$('#b-msg');m.textContent='作成中…';let z;
+    try{z=await exportZip();await dl.save(fn,z);markBackup();msg='保存しました。'}
+    catch(e){if(e&&e.code==='gesture'){m.innerHTML='ZIPができました。<button class="btn p" id="b-save2">保存する</button>';
+        $('#b-save2').onclick=async()=>{try{await dl.save(fn,z);markBackup();msg='保存しました。'}catch(e){msg='保存できませんでした。'}m.textContent=msg;head()};return}
+      msg=e&&e.code==='declined'?'保存をキャンセルしました。':'保存できませんでした。'}
+    m.textContent=msg;head()};
+  const run=async src=>{$('#b-msg').textContent='読み込み中…';try{showImp(prep(await parseFile(src)));$('#b-msg').textContent=''}catch(e){$('#b-msg').textContent='';alert('読み込めませんでした。バックアップの形式を確認してください。')}};
+  $('#i-go').onclick=()=>{const t=$('#i-txt').value.trim();if(t)run(new Blob([t]));else alert('テキストを貼り付けるか、ファイルを選んでください')};
+  $('#i-file').onchange=ev=>{const f=ev.target.files[0];if(f)run(f)};
+  if(legacy)$('#b-old').onclick=()=>{if(confirm('旧データを削除します。ver2で記録が表示されていることを確認しましたか？')){localStorage.removeItem(KEY);localStorage.removeItem(MKEY);render()}};
 }
 function sync(){
   const e=editing;e.date=$('#f-date').value||today();e.place=$('#f-place').value.trim();e.feedback=$('#f-fb').value.trim();
-  e.exercises=$('#f-ex').value.split('\n').map(s=>s.trim()).filter(Boolean);
-  e.parts=[...document.querySelectorAll('.prow')].map(r=>({part:r.children[0].value.trim(),symptom:r.children[1].value.trim()}));
+  e.parts=[...document.querySelectorAll('.pb:not(.ex)')].map(b=>({part:b.querySelector('input').value.trim(),symptom:b.querySelectorAll('input')[1].value.trim(),detail:b.querySelector('textarea').value.trim()}));
+  e.exercises=[...document.querySelectorAll('.ex')].map((b,i)=>({text:b.querySelector('input').value.trim(),photos:((e.exercises[i]||{photos:[]}).photos).map((p,j)=>({id:p.id,caption:b.querySelectorAll('.cap')[j].value.trim()}))}));
 }
 function renderForm(){
   const e=editing;
-  const rows=(e.parts.length?e.parts:[{part:'',symptom:''}]).map((p,i)=>`<div class="prow"><input list="dl-part" placeholder="部位（例：右肩）" value="${esc(p.part)}"><input list="dl-sym" placeholder="症状（例：痛み）" value="${esc(p.symptom)}"><button class="x" data-rm="${i}" aria-label="削除">×</button></div>`).join('');
-  $('#view').innerHTML=`<div class="card"><div class="date">${e.id&&entries.some(x=>x.id===e.id)?'記録を編集':'新しい記録'}</div>
+  const ps=(e.parts.length?e.parts:[{part:'',symptom:'',detail:''}]).map((p,i)=>`<div class="pb"><div class="prow"><input list="dl-part" placeholder="部位（例：右肩）" value="${esc(p.part)}"><button class="x" data-rm="${i}" aria-label="削除">×</button></div><input list="dl-sym" placeholder="症状（例：痛み）" value="${esc(p.symptom)}"><textarea placeholder="詳細（例：腕を上げると肩の前側が引っかかる）">${esc(p.detail)}</textarea></div>`).join('');
+  const xs=(e.exercises.length?e.exercises:[{text:'',photos:[]}]).map((x,i)=>`<div class="pb ex"><div class="prow"><input placeholder="メニュー（例：肩甲骨寄せ 10回×3セット）" value="${esc(x.text)}"><button class="x" data-rmx="${i}" aria-label="削除">×</button></div>${x.photos.map((p,j)=>`<div class="pi">${th.has(p.id)?`<img src="${th.get(p.id).u}" data-v="${p.id}">`:'<div style="width:56px"></div>'}<input class="cap" placeholder="触る場所・コツ" value="${esc(p.caption)}"><button class="x" data-rmp="${i}.${j}" aria-label="写真を削除">×</button></div>`).join('')}<label class="btn" style="display:inline-block;margin:8px 0 0">📷 写真を追加<input type="file" accept="image/*" multiple hidden data-addp="${i}"></label></div>`).join('');
+  $('#view').innerHTML=`<div class="card"><div class="date">${entries.some(x=>x.id===e.id)?'記録を編集':'新しい記録'}</div>
   <label>日付</label><input type="date" id="f-date" value="${esc(e.date)}">
   <label>担当・場所（任意）</label><input id="f-place" placeholder="例：〇〇整骨院 / 田中先生" value="${esc(e.place)}">
-  <label>痛み・動きが悪かった部位と症状</label>${rows}
+  <label>痛み・動きが悪かった部位と症状</label>${ps}
   <button class="btn" id="f-addp">＋ 部位を追加</button>
   <label>受けたフィードバック・施術内容</label><textarea id="f-fb" placeholder="例：右肩の可動域が改善。猫背で肩が前に出やすい。">${esc(e.feedback)}</textarea>
-  <label>自宅でやること</label><textarea id="f-ex" placeholder="1行に1つ書いてください&#10;例：肩甲骨寄せ 10回×3セット（朝晩）">${esc(e.exercises.join('\n'))}</textarea>
-  <p class="hint">1行に1メニュー。回数や頻度も一緒に書けます。</p>
+  <label>自宅でやること</label>${xs}
+  <button class="btn" id="f-addx">＋ メニューを追加</button>
+  <p class="hint">写真は、撮影してマークアップしたものを写真ライブラリから選んでください。</p><p class="hint" id="ph-st"></p>
   <div class="row"><button class="btn p" id="f-save">保存</button><button class="btn" id="f-cancel">キャンセル</button></div></div>`;
-  $('#f-addp').onclick=()=>{sync();editing.parts.push({part:'',symptom:''});renderForm()};
+  bindV();
+  $('#f-addp').onclick=()=>{sync();editing.parts.push({part:'',symptom:'',detail:''});renderForm()};
+  $('#f-addx').onclick=()=>{sync();editing.exercises.push({text:'',photos:[]});renderForm()};
   document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{sync();editing.parts.splice(+b.dataset.rm,1);renderForm()});
-  $('#f-cancel').onclick=()=>{editing=null;render()};
-  $('#f-save').onclick=()=>{
-    sync();const o={...editing,parts:editing.parts.filter(p=>p.part)};
+  document.querySelectorAll('[data-rmx]').forEach(b=>b.onclick=()=>{sync();editing.exercises.splice(+b.dataset.rmx,1);renderForm()});
+  document.querySelectorAll('[data-rmp]').forEach(b=>b.onclick=()=>{sync();const[i,j]=b.dataset.rmp.split('.').map(Number);editing.exercises[i].photos.splice(j,1);renderForm()});
+  document.querySelectorAll('[data-addp]').forEach(inp=>inp.onchange=async()=>{
+    const i=+inp.dataset.addp,fs=[...inp.files];if(!fs.length)return;sync();
+    if(!editing.exercises[i])editing.exercises[i]={text:'',photos:[]};
+    let bad=0;for(let k=0;k<fs.length;k++){$('#ph-st').textContent=`写真を処理中…（${k+1}/${fs.length}）`;
+      try{const id=await mkPhoto(fs[k]);if(!editing)return;editing.exercises[i].photos.push({id,caption:''})}catch(err){bad++}}
+    if(!editing)return;renderForm();if(bad)alert(`${bad}枚の写真を読み込めませんでした。`)});
+  $('#f-cancel').onclick=()=>{editing=null;gc();render()};
+  $('#f-save').onclick=async()=>{
+    sync();const o={...editing,parts:editing.parts.filter(p=>p.part),exercises:editing.exercises.filter(x=>x.text||x.photos.length)};
     if(!o.feedback&&!o.exercises.length&&!o.parts.length){alert('部位・フィードバック・自宅メニューのいずれかは入力してください');return}
-    const i=entries.findIndex(x=>x.id===o.id);i>=0?entries[i]=o:entries.push(o);
-    save();editing=null;tab='log';render();
+    o.updatedAt=new Date().toISOString();
+    try{await put(o)}catch(err){alert('保存できませんでした。端末の空き容量を確認してください。');return}
+    await gc();mo=o.date.slice(0,7);q='';pf='';editing=null;tab='log';render();
   };
 }
-document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;editing=null;msg='';render()});
-$('#fab').onclick=()=>{editing={id:Date.now(),date:today(),place:'',feedback:'',exercises:[],parts:[]};render()};
-render();
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;editing=null;msg='';note='';gc();render()});
+$('#fab').onclick=()=>{editing={id:uid(),date:today(),place:'',feedback:'',parts:[],exercises:[],createdAt:Date.now(),updatedAt:''};render()};
+
+(async()=>{
+  try{db=await new Promise((ok,ng)=>{const r=indexedDB.open('rehab-notes',1);r.onupgradeneeded=()=>['entries','photos','thumbs','meta'].forEach(s=>r.result.createObjectStore(s));r.onsuccess=()=>ok(r.result);r.onerror=()=>ng(r.error)});
+    entries=(await req('entries','r',s=>s.getAll())).map(norm);
+    meta=(await req('meta','r',s=>s.get('meta')))||{};
+    (await req('thumbs','r',s=>s.getAll())).forEach(t=>th.set(t.id,{u:URL.createObjectURL(t.t),s:t.s}));
+  }catch(e){$('#view').innerHTML='<div class="warn">このブラウザではデータを保存できません（IndexedDBが使えません）。プライベートブラウズを解除して開き直してください。</div>';return}
+  if(!meta.migrated){
+    try{const old=JSON.parse(localStorage.getItem(KEY)||'[]'),om=JSON.parse(localStorage.getItem(MKEY)||'{}')||{};
+      if(Array.isArray(old)&&old.length){const ids=new Set(entries.map(e=>e.id));for(const n of old.map(norm))if(!ids.has(n.id))await put(n);
+        note=`以前の保存形式から ${old.length} 件を引き継ぎました。旧データは、内容を確認してから「バックアップ」タブで削除できます。`}
+      if(om.last&&!meta.last)meta.last=om.last;
+      meta.migrated=1;await saveMeta()}catch(e){}
+  }
+  if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});
+  await gc().catch(()=>{});
+  render();
+})();
 </script>
 </body>
 </html>
